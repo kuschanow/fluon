@@ -1,0 +1,82 @@
+[project]
+name = "fluon-workspace"
+version = "0"
+requires-python = ">=3.11"
+dependencies = ["fluon", "fluon-graph"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["fluon", "graph"]
+
+[tool.uv.sources]
+fluon = { workspace = true }
+fluon-graph = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-html",
+    "ruff",
+    "mypy",
+    "pyright",
+    "import-linter",
+    "maturin",
+]
+
+# --- ruff ---
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fluon"]
+
+# --- pytest ---
+[tool.pytest.ini_options]
+testpaths = ["fluon/tests", "graph/tests"]
+addopts = "--cov --cov-report=term-missing"
+asyncio_mode = "auto"
+
+# --- coverage ---
+[tool.coverage.run]
+source_pkgs = ["fluon"]
+
+[tool.coverage.report]
+fail_under = 100
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "^\\s*\\.\\.\\.\\s*$",
+]
+
+# --- mypy ---
+[tool.mypy]
+strict = true
+python_version = "3.11"
+mypy_path = ["fluon/python", "graph/src"]
+explicit_package_bases = true
+
+# --- pyright ---
+[tool.pyright]
+include = ["fluon/python", "graph/src"]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+reportUnnecessaryTypeIgnoreComment = true
+
+# --- import-linter ---
+[tool.importlinter]
+root_packages = ["fluon"]
+
+[[tool.importlinter.contracts]]
+name = "Layers"
+type = "layers"
+containers = ["fluon"]
+layers = ["(graph)", "(compute) | (events)", "(_core)"]

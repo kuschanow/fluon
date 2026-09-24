@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fluon-graph"
+version = "0.1.0"
+description = "graph model for fluon"
+authors = [
+    { name = "Roman", email = "kuschanow@gmail.com" },
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Typing :: Typed",
+]
+dependencies = ["fluon>=0.1,<0.2"]
+
+[project.urls]
+Homepage = "https://github.com/kuschanow/fluon"
+Source = "https://github.com/kuschanow/fluon"
+Tracker = "https://github.com/kuschanow/fluon/issues"
+Documentation = "https://github.com/kuschanow/fluon"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

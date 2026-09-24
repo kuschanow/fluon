@@ -1,0 +1,41 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "fluon"
+version = "0.1.0"
+description = "typed entity store and compute engine"
+authors = [
+    { name = "Roman", email = "kuschanow@gmail.com" },
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/kuschanow/fluon"
+Source = "https://github.com/kuschanow/fluon"
+Tracker = "https://github.com/kuschanow/fluon/issues"
+Documentation = "https://github.com/kuschanow/fluon"
+
+[tool.maturin]
+manifest-path = "../crates/fluon-native/Cargo.toml"
+python-source = "python"
+module-name = "fluon._native"
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "../Cargo.toml" },
+    { file = "../crates/fluon-native/Cargo.toml" },
+    { file = "../crates/fluon-native/src/**/*.rs" },
+]
