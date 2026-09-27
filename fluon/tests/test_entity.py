@@ -5,13 +5,6 @@ from fluon._core.entity import entity, make_handle
 from fluon._core.errors import FrozenEntityError, NoActiveOperationError, TypeKeyCollisionError
 from fluon._core.types.field import Field
 
-
-@pytest.fixture(autouse=True)
-def clean_registry(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The registry is global: each test gets an empty one so type keys never collide between tests.
-    monkeypatch.setattr(entity_module, "_registry", {})
-
-
 # --- Registration ---
 
 
