@@ -1,7 +1,7 @@
 from typing import Any, get_type_hints
 
 from fluon._core.errors import UnresolvedAnnotationError
-from fluon._core.types.field_type import FieldType, Reference, parse
+from fluon._core.types.field_type import FieldType, parse
 
 
 def resolve(cls: type) -> None:
@@ -25,6 +25,5 @@ class Field:
         raw = obj._values[self.name]
         if self.field_type is None:
             resolve(owner)
-        if isinstance(self.field_type, Reference):
-            return obj._src.handle(self.field_type.target, raw)
-        return raw
+            assert self.field_type is not None
+        return self.field_type.load(obj._src, raw)

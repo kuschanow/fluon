@@ -70,7 +70,7 @@ explicit_package_bases = true
 # --- pyright ---
 [tool.pyright]
 include = ["fluon/python", "graph/src"]
-extraPaths = ["fluon/python", "graph/src"]
+extraPaths = ["fluon/python", "graph/src", "fluon/tests"]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
 reportUnnecessaryTypeIgnoreComment = true

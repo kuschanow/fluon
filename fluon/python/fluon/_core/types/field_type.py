@@ -1,57 +1,71 @@
 from dataclasses import dataclass
 from enum import Enum
 from types import NoneType, UnionType
-from typing import Union, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 from fluon._core.errors import FieldTypeError
-from fluon._core.types.descriptors import OptionalRef, OptionalRefs, Ref, Refs
+from fluon._core.types.descriptors import Link, OptionalRef, OptionalRefs, Ref, Refs
+
+
+class FieldType:
+    def load(self, src: Any, raw: Any) -> Any:
+        """Turn a stored value into what the user sees. Plain values are returned as stored."""
+        return raw
 
 
 @dataclass(frozen=True)
-class Scalar:
+class Scalar(FieldType):
     """A scalar type, such as int, str, or float."""
 
     typ: type
 
 
 @dataclass(frozen=True)
-class Reference:
+class Reference(FieldType):
     """A reference to another entity type: Ref, OptionalRef, Refs or OptionalRefs."""
 
     target: type
     optional: bool = False
     many: bool = False
 
+    def load(self, src: Any, raw: Any) -> Any:
+        """Turn a stored value into what the user sees. References are loaded from the source."""
+        if self.many:
+            if self.optional:
+                return tuple(Link[Any](r, src, self.target) for r in raw)
+            return tuple(src.handle(self.target, r) for r in raw)
+        if self.optional:
+            return Link[Any](raw, src, self.target)
+        return src.handle(self.target, raw)
+
 
 @dataclass(frozen=True)
-class Nullable:
+class Nullable(FieldType):
     """A nullable type, such as int | None."""
 
     typ: "FieldType"
 
 
 @dataclass(frozen=True)
-class FixedTuple:
+class FixedTuple(FieldType):
     """A fixed-length tuple type, such as tuple[int, str]."""
 
     types: tuple["FieldType", ...]
 
 
 @dataclass(frozen=True)
-class VarTuple:
+class VarTuple(FieldType):
     """A variable-length tuple type, such as tuple[int, ...]."""
 
     typ: "FieldType"
 
 
 @dataclass(frozen=True)
-class FrozenSetOf:
+class FrozenSetOf(FieldType):
     """A frozen set type, such as frozenset[int]."""
 
     typ: "FieldType"
 
-
-FieldType = Scalar | Reference | Nullable | FixedTuple | VarTuple | FrozenSetOf
 
 _SCALARS: tuple[type, ...] = (bool, int, float, str, bytes, NoneType, Enum)
 _MUTABLE_CONTAINERS: tuple[object, ...] = (list, dict, set)
