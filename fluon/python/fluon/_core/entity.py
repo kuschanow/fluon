@@ -17,6 +17,24 @@ def _frozen_setattr(obj: object, name: str, value: Any) -> None:
     raise FrozenEntityError(name)
 
 
+class _HandleMethods:
+    """Methods copied onto every entity class. Never instantiated."""
+
+    _src: Any
+    _id: int
+
+    def __eq__(self, other: object) -> bool:
+        if type(other) is not type(self):
+            return NotImplemented
+        return self._id == other._id and self._src is other._src
+
+    def __hash__(self) -> int:
+        return hash((id(self._src), self._id))
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} #{self._id}>"
+
+
 def make_handle(cls: type[T], src: str, id: int, values: dict[str, Any]) -> T:
     obj = object.__new__(cls)
     object.__setattr__(obj, "_src", src)
@@ -35,6 +53,9 @@ def entity(type_key: str, *, version: int) -> Callable[[type[T]], type[T]]:
             setattr(cls, name, Field(name))
         setattr(cls, "__init__", _entity_init)
         setattr(cls, "__setattr__", _frozen_setattr)
+        setattr(cls, "__repr__", _HandleMethods.__repr__)
+        setattr(cls, "__eq__", _HandleMethods.__eq__)
+        setattr(cls, "__hash__", _HandleMethods.__hash__)
         return cls
 
     return wrap
