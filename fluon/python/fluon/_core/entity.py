@@ -1,7 +1,7 @@
 from collections.abc import Callable
-from typing import Any, TypeVar, dataclass_transform
+from typing import Any, ClassVar, TypeVar, dataclass_transform, get_origin
 
-from fluon._core.errors import FrozenEntityError, NoActiveOperationError
+from fluon._core.errors import FrozenEntityError, InvalidFieldNameError, NoActiveOperationError
 from fluon._core.registry import Registry
 from fluon._core.registry import registry as default_registry
 from fluon._core.types.field import Field
@@ -43,13 +43,30 @@ def make_handle(cls: type[T], src: str, id: int, values: dict[str, Any]) -> T:
     return obj
 
 
+def _is_class_var(annotation: object) -> bool:
+    if isinstance(annotation, str):
+        # "ClassVar[int]" -> "ClassVar", " typing.ClassVar[int] " -> "typing.ClassVar"
+        head = annotation.split("[", 1)[0].strip()
+        return head in ("ClassVar", "typing.ClassVar")
+    return annotation is ClassVar or get_origin(annotation) is ClassVar
+
+
 @dataclass_transform(frozen_default=True, kw_only_default=True)
 def entity(type_key: str, *, version: int, registry: Registry | None = None) -> Callable[[type[T]], type[T]]:
     def wrap(cls: type[T]) -> type[T]:
-        target = registry or default_registry
+        names = [name for name, annotation in cls.__annotations__.items() if not _is_class_var(annotation)]
+        for name in names:
+            if name.startswith("_"):
+                raise InvalidFieldNameError(cls, name)
+        target = registry if registry is not None else default_registry
         target.register(type_key, version, cls)
-        for name in cls.__annotations__:
-            setattr(cls, name, Field(name))
+        for name in names:
+            has_default = name in cls.__dict__
+            if has_default:
+                default_value = cls.__dict__[name]
+            else:
+                default_value = None
+            setattr(cls, name, Field(name, has_default=has_default, default=default_value))
         setattr(cls, "__fluon_registry__", target)
         setattr(cls, "__init__", _entity_init)
         setattr(cls, "__setattr__", _frozen_setattr)

@@ -11,17 +11,27 @@ def resolve(cls: type) -> None:
         hints = get_type_hints(cls, localns={cls.__name__: cls})
     except NameError as e:
         raise UnresolvedAnnotationError(cls.__name__, str(e.name)) from e
-    for name, hint in hints.items():
-        field_type = parse(hint)
+    for name, attr in vars(cls).items():
+        if not isinstance(attr, Field):
+            continue
+        field_type = parse(hints[name])
         if isinstance(field_type, Reference) and registry_of(field_type.target) is not registry_of(cls):
             raise CrossRegistryReferenceError(cls, name, field_type.target)
-        cls.__dict__[name].field_type = parse(hint)
+        attr.field_type = field_type
 
 
 class Field:
-    def __init__(self, name: str, field_type: FieldType | None = None) -> None:
+    def __init__(self, name: str, field_type: FieldType | None = None, has_default: bool = False, default: Any = None) -> None:
         self.name = name
         self.field_type = field_type
+        self.has_default = has_default
+        self._default = default
+
+    @property
+    def default(self) -> Any:
+        if not self.has_default:
+            raise AttributeError(f"Field '{self.name}' has no default value")
+        return self._default
 
     def __get__(self, obj: Any, owner: type) -> Any:
         if obj is None:

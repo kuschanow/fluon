@@ -1,6 +1,7 @@
 from .cross_registry_reference_error import CrossRegistryReferenceError
 from .field_type_error import FieldTypeError
 from .frozen_entity_error import FrozenEntityError
+from .invalid_field_name_error import InvalidFieldNameError
 from .invalid_type_key_error import InvalidTypeKeyError
 from .missing_error import MissingError
 from .no_active_operation_error import NoActiveOperationError
@@ -13,6 +14,7 @@ __all__ = [
     "CrossRegistryReferenceError",
     "FieldTypeError",
     "FrozenEntityError",
+    "InvalidFieldNameError",
     "InvalidTypeKeyError",
     "MissingError",
     "NoActiveOperationError",
