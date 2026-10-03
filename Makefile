@@ -12,7 +12,7 @@ lint:
 	uv run lint-imports
 
 typecheck:
-	uv run mypy fluon/python graph/src
+	uv run mypy fluon/python graph/src fluon/tests/type_checks
 	uv run pyright
 
 test:

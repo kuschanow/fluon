@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, dataclass_transform
 
 from fluon._core.errors import FrozenEntityError, NoActiveOperationError, TypeKeyCollisionError
 from fluon._core.types.field import Field
@@ -25,6 +25,7 @@ def make_handle(cls: type[T], src: str, id: int, values: dict[str, Any]) -> T:
     return obj
 
 
+@dataclass_transform(frozen_default=True, kw_only_default=True)
 def entity(type_key: str, *, version: int) -> Callable[[type[T]], type[T]]:
     def wrap(cls: type[T]) -> type[T]:
         if type_key in _registry:
