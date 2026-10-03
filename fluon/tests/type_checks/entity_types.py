@@ -8,7 +8,7 @@ This file is never executed. It is checked by mypy and pyright (see `make typech
 
 from typing import assert_type
 
-from fluon import Link, OptionalRef, OptionalRefs, Ref, Refs, entity
+from fluon import Link, OptionalRef, OptionalRefs, Ref, Refs, Registry, alive, entity, id_of
 
 
 @entity("checks.Node", version=1)
@@ -29,6 +29,25 @@ class Group:
     name: str
     owners: Refs[Node]
     members: OptionalRefs[Node]
+
+
+models = Registry()
+
+
+@entity("checks.Customer", version=1, registry=models)
+class Customer:
+    name: str
+
+
+def explicit_registry(customer: Customer) -> None:
+    assert_type(Customer(name="Ann"), Customer)
+    assert_type(customer.name, str)
+    entity("checks.Bad", version=1, registry="models")  # type: ignore[arg-type]  # not a Registry
+
+
+def introspection(node: Node) -> None:
+    assert_type(id_of(node), int)
+    assert_type(alive(node), bool)
 
 
 def construction(a: Node, b: Node) -> None:

@@ -1,7 +1,8 @@
 from typing import Any, get_type_hints
 
-from fluon._core.errors import UnresolvedAnnotationError
-from fluon._core.types.field_type import FieldType, parse
+from fluon._core.errors import CrossRegistryReferenceError, UnresolvedAnnotationError
+from fluon._core.types.field_type import FieldType, Reference, parse
+from fluon._core.utils import registry_of
 
 
 def resolve(cls: type) -> None:
@@ -11,6 +12,9 @@ def resolve(cls: type) -> None:
     except NameError as e:
         raise UnresolvedAnnotationError(cls.__name__, str(e.name)) from e
     for name, hint in hints.items():
+        field_type = parse(hint)
+        if isinstance(field_type, Reference) and registry_of(field_type.target) is not registry_of(cls):
+            raise CrossRegistryReferenceError(cls, name, field_type.target)
         cls.__dict__[name].field_type = parse(hint)
 
 

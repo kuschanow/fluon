@@ -1,13 +1,18 @@
+from collections.abc import Iterator
+
 import pytest
 from fakes import FakeSource
 
-import fluon._core.entity as entity_module
+from fluon._core.registry import registry
 
 
 @pytest.fixture(autouse=True)
-def clean_registry(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The registry is global: each test gets an empty one so type keys never collide between tests.
-    monkeypatch.setattr(entity_module, "_registry", {})
+def isolated_registry() -> Iterator[None]:
+    # The registry is process-wide. Types registered at import stay visible;
+    # whatever a test registers itself is dropped afterwards, so type keys never collide between tests.
+    state = registry._snapshot()
+    yield
+    registry._restore(state)
 
 
 @pytest.fixture

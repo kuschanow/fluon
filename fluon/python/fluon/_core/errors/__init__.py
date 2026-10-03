@@ -1,3 +1,4 @@
+from .cross_registry_reference_error import CrossRegistryReferenceError
 from .field_type_error import FieldTypeError
 from .frozen_entity_error import FrozenEntityError
 from .invalid_type_key_error import InvalidTypeKeyError
@@ -9,6 +10,7 @@ from .unknown_type_error import UnknownTypeError
 from .unresolved_annotation_error import UnresolvedAnnotationError
 
 __all__ = [
+    "CrossRegistryReferenceError",
     "FieldTypeError",
     "FrozenEntityError",
     "InvalidTypeKeyError",

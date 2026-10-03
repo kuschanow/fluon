@@ -1,8 +1,8 @@
 import pytest
 
-import fluon._core.entity as entity_module
 from fluon._core.entity import entity, make_handle
-from fluon._core.errors import FrozenEntityError, NoActiveOperationError, TypeKeyCollisionError
+from fluon._core.errors import FrozenEntityError, InvalidTypeKeyError, NoActiveOperationError, TypeKeyCollisionError
+from fluon._core.registry import registry
 from fluon._core.types.field import Field
 
 # --- Registration ---
@@ -20,7 +20,7 @@ def test_registered_class_is_found_by_key() -> None:
     class Node:
         label: str
 
-    assert entity_module._registry["graph.Node"] is Node
+    assert registry.by_key("graph.Node").cls is Node
 
 
 def test_duplicate_key_is_rejected() -> None:
@@ -46,7 +46,51 @@ def test_rejected_duplicate_keeps_first_class() -> None:
         class Other:
             label: str
 
-    assert entity_module._registry["graph.Node"] is Node
+    assert registry.by_key("graph.Node").cls is Node
+
+
+def test_registered_class_is_found_by_class() -> None:
+    @entity("graph.Node", version=1)
+    class Node:
+        label: str
+
+    assert registry.by_class(Node).key == "graph.Node"
+
+
+def test_version_is_recorded() -> None:
+    @entity("graph.Node", version=3)
+    class Node:
+        label: str
+
+    assert registry.by_key("graph.Node").version == 3
+
+
+def test_malformed_key_is_rejected() -> None:
+    with pytest.raises(InvalidTypeKeyError):
+
+        @entity("Node", version=1)
+        class Node:
+            label: str
+
+
+def test_invalid_version_is_rejected() -> None:
+    with pytest.raises(ValueError, match="version"):
+
+        @entity("graph.Node", version=0)
+        class Node:
+            label: str
+
+
+def test_class_with_rejected_registration_is_left_untouched() -> None:
+    # A failed registration must not leave a half-decorated class behind.
+    class Node:
+        label: str
+
+    with pytest.raises(InvalidTypeKeyError):
+        entity("Node", version=1)(Node)
+
+    assert "label" not in Node.__dict__
+    assert not registry.is_registered(Node)
 
 
 def test_version_is_keyword_only() -> None:

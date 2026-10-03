@@ -5,6 +5,7 @@ from typing import Any, Union, get_args, get_origin
 
 from fluon._core.errors import FieldTypeError
 from fluon._core.types.descriptors import Link, OptionalRef, OptionalRefs, Ref, Refs
+from fluon._core.utils import registry_of
 
 
 class FieldType:
@@ -100,6 +101,11 @@ def _parse(hint: object, *, in_container: bool) -> FieldType:
         raise FieldTypeError(hint, "mutable containers are not allowed; use tuple[...] or frozenset[...]")
     if isinstance(hint, type) and issubclass(hint, _SCALARS):
         return Scalar(hint)
+    if registry_of(hint) is not None:
+        if in_container:
+            raise FieldTypeError(hint, "references are not allowed inside tuple[...] or frozenset[...]; use Refs[...] or OptionalRefs[...]")
+        name = getattr(hint, "__name__", "T")
+        raise FieldTypeError(hint, f"an entity type must be wrapped in a reference: Ref[{name}] or OptionalRef[{name}]")
     raise FieldTypeError(
         hint,
         "supported field types are bool, int, float, str, bytes, None, Enum, "
@@ -114,6 +120,8 @@ def _parse_reference(hint: object, origin: object, args: tuple[object, ...], *, 
     if not isinstance(target, type):
         raise FieldTypeError(hint, f"reference target must be a class, got {target!r}")
     optional, many = _REFERENCES[origin]
+    if registry_of(target) is None:
+        raise FieldTypeError(hint, f"reference target must be an entity type, but {target.__name__} is not registered with @entity")
     return Reference(target, optional=optional, many=many)
 
 

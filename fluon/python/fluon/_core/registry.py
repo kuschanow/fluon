@@ -63,6 +63,10 @@ class Registry:
         self._by_class = dict(state.by_class)
 
 
+registry = Registry()
+"""The process-wide registry: types are registered here on import."""
+
+
 def _check_key(key: str) -> None:
     # "<package>.<Name>": dot-separated identifiers, at least two of them.
     parts = key.split(".")

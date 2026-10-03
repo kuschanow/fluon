@@ -115,3 +115,16 @@ def test_link_is_rejected(src: FakeSource) -> None:
         id_of(note.target)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="entity"):
         alive(note.target)  # type: ignore[arg-type]
+
+
+def test_object_that_merely_looks_like_a_handle_is_rejected(src: FakeSource) -> None:
+    # Having `_id` and `_src` is not enough: only instances of registered entity types count.
+    class Impostor:
+        def __init__(self, src: FakeSource) -> None:
+            self._id = 1
+            self._src = src
+
+    with pytest.raises(TypeError, match="entity"):
+        id_of(Impostor(src))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="entity"):
+        alive(Impostor(src))  # type: ignore[arg-type]

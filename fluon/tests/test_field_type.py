@@ -3,6 +3,7 @@ from typing import Optional, Union
 
 import pytest
 
+from fluon._core.entity import entity
 from fluon._core.errors import FieldTypeError
 from fluon._core.types.descriptors import OptionalRef, OptionalRefs, Ref, Refs
 from fluon._core.types.field_type import (
@@ -16,7 +17,12 @@ from fluon._core.types.field_type import (
 )
 
 
+@entity("field_type.Node", version=1)
 class Node:
+    label: str
+
+
+class NotAnEntity:
     pass
 
 
@@ -66,8 +72,9 @@ def test_optional_refs() -> None:
 
 
 def test_reference_remembers_target() -> None:
+    @entity("field_type.Other", version=1)
     class Other:
-        pass
+        label: str
 
     assert parse(Ref[Node]) != parse(Ref[Other])
 
@@ -195,3 +202,37 @@ def test_nullable_reference_is_rejected(hint: object) -> None:
 def test_unresolved_reference_target_is_rejected() -> None:
     with pytest.raises(FieldTypeError, match="class"):
         parse(Ref["Node"])
+
+
+# --- Rejected: references to something that is not an entity ---
+
+
+@pytest.mark.parametrize("hint", [Ref[int], OptionalRef[str], Refs[NotAnEntity], OptionalRefs[Color]])
+def test_reference_to_a_non_entity_is_rejected(hint: object) -> None:
+    with pytest.raises(FieldTypeError, match="entity"):
+        parse(hint)
+
+
+def test_reference_to_a_non_entity_error_names_the_target() -> None:
+    with pytest.raises(FieldTypeError, match="NotAnEntity"):
+        parse(Ref[NotAnEntity])
+
+
+# --- Rejected: an entity type used without a reference marker ---
+
+
+def test_bare_entity_type_is_rejected_with_a_hint() -> None:
+    # `u: Node` is ambiguous: the reference kind decides what happens when the target is removed.
+    with pytest.raises(FieldTypeError, match=r"Ref\[.*\].*OptionalRef\[.*\]"):
+        parse(Node)
+
+
+def test_bare_entity_type_inside_a_container_gets_the_container_hint() -> None:
+    with pytest.raises(FieldTypeError, match="Refs"):
+        parse(tuple[Node, ...])
+
+
+def test_plain_class_gets_no_reference_hint() -> None:
+    with pytest.raises(FieldTypeError) as exc_info:
+        parse(NotAnEntity)
+    assert "Ref[" not in str(exc_info.value)

@@ -1,12 +1,12 @@
 from collections.abc import Callable
 from typing import Any, TypeVar, dataclass_transform
 
-from fluon._core.errors import FrozenEntityError, NoActiveOperationError, TypeKeyCollisionError
+from fluon._core.errors import FrozenEntityError, NoActiveOperationError
+from fluon._core.registry import Registry
+from fluon._core.registry import registry as default_registry
 from fluon._core.types.field import Field
 
 T = TypeVar("T")
-
-_registry: dict[str, type] = {}  # TODO: replace with actual registry implementation
 
 
 def _entity_init(self: object, **kwargs: Any) -> None:
@@ -44,13 +44,13 @@ def make_handle(cls: type[T], src: str, id: int, values: dict[str, Any]) -> T:
 
 
 @dataclass_transform(frozen_default=True, kw_only_default=True)
-def entity(type_key: str, *, version: int) -> Callable[[type[T]], type[T]]:
+def entity(type_key: str, *, version: int, registry: Registry | None = None) -> Callable[[type[T]], type[T]]:
     def wrap(cls: type[T]) -> type[T]:
-        if type_key in _registry:
-            raise TypeKeyCollisionError(type_key)
-        _registry[type_key] = cls
+        target = registry or default_registry
+        target.register(type_key, version, cls)
         for name in cls.__annotations__:
             setattr(cls, name, Field(name))
+        setattr(cls, "__fluon_registry__", target)
         setattr(cls, "__init__", _entity_init)
         setattr(cls, "__setattr__", _frozen_setattr)
         setattr(cls, "__repr__", _HandleMethods.__repr__)
