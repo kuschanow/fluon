@@ -1,5 +1,6 @@
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
+from fluon._core.backend import Backend, ChangeSet, CreatedBatch, Transaction
 from fluon._core.entity import entity
 from fluon._core.errors import FrozenEntityError, NoActiveOperationError, TypeKeyCollisionError
 from fluon._core.registry import Registry, TypeInfo
@@ -7,6 +8,10 @@ from fluon._core.types.descriptors import Link, OptionalRef, OptionalRefs, Ref, 
 from fluon._core.utils import alive, id_of, registry_of
 
 __all__ = [
+    "Backend",
+    "ChangeSet",
+    "CreatedBatch",
+    "Transaction",
     "entity",
     "FrozenEntityError",
     "NoActiveOperationError",
