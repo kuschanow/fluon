@@ -1,6 +1,6 @@
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
-from fluon._core.backend import Backend, ChangeSet, CreatedBatch, Transaction
+from fluon._core.backend import Backend, ChangeSet, CreatedBatch, DeletedBatch, Transaction
 from fluon._core.entity import entity
 from fluon._core.errors import FrozenEntityError, NoActiveOperationError, TypeKeyCollisionError
 from fluon._core.registry import Registry, TypeInfo
@@ -11,6 +11,7 @@ __all__ = [
     "Backend",
     "ChangeSet",
     "CreatedBatch",
+    "DeletedBatch",
     "Transaction",
     "entity",
     "FrozenEntityError",

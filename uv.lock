@@ -219,6 +219,19 @@ name = "fluon"
 version = "0.1.0"
 source = { editable = "fluon" }
 
+[package.optional-dependencies]
+testing = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pytest", marker = "extra == 'testing'", specifier = ">=8" },
+    { name = "pytest-asyncio", marker = "extra == 'testing'", specifier = ">=0.23" },
+]
+provides-extras = ["testing"]
+
 [[package]]
 name = "fluon-graph"
 version = "0.1.0"

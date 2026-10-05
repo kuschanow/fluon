@@ -12,14 +12,29 @@ class CreatedBatch:
 
 
 @dataclass(frozen=True)
+class DeletedBatch:
+    type_key: str
+    ids: Sequence[int]
+
+
+@dataclass(frozen=True)
 class ChangeSet:
+    """Everything a transaction is asked to write at once. Creations are applied before deletions."""
+
     created: Sequence[CreatedBatch] = ()
+    deleted: Sequence[DeletedBatch] = ()
 
 
 class Transaction(Protocol):
     async def apply(self, changes: ChangeSet) -> None: ...
 
     async def fields(self, type_key: str, ids: Sequence[int]) -> dict[str, list[Any]]: ...
+
+    async def all(self, type_key: str) -> list[int]: ...
+
+    async def referencing(self, type_key: str, field: str, targets: Sequence[int]) -> list[int]: ...
+
+    async def next_id(self, type_key: str) -> int: ...
 
     async def commit(self) -> None: ...
 
