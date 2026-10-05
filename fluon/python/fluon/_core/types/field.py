@@ -1,16 +1,24 @@
 from typing import Any, get_type_hints
 
-from fluon._core.errors import CrossRegistryReferenceError, UnresolvedAnnotationError
+from fluon._core.errors import CrossRegistryReferenceError, NotLoadedError, UnresolvedAnnotationError
 from fluon._core.types.field_type import FieldType, Reference, parse
 from fluon._core.utils import registry_of
 
 
 def resolve(cls: type) -> None:
-    """Resolve forward references in the annotations of a class."""
+    """Parse the annotations of an entity class and give every field its type.
+
+    Done on first use rather than in the decorator: by then every class an annotation mentions
+    exists, including the class itself and classes declared later.
+    """
+    if not any(isinstance(attr, Field) for attr in vars(cls).values()):
+        return
     try:
+        # localns lets a class declared inside a function refer to itself.
         hints = get_type_hints(cls, localns={cls.__name__: cls})
     except NameError as e:
         raise UnresolvedAnnotationError(cls.__name__, str(e.name)) from e
+    # The decorator decided what is a field by installing a Field; ClassVars have none.
     for name, attr in vars(cls).items():
         if not isinstance(attr, Field):
             continue
@@ -21,6 +29,11 @@ def resolve(cls: type) -> None:
 
 
 class Field:
+    """The descriptor installed on an entity class for each of its fields.
+
+    Reads the value from the handle; a reference is turned into the handle (or Link) of its target.
+    """
+
     def __init__(self, name: str, field_type: FieldType | None = None, has_default: bool = False, default: Any = None) -> None:
         self.name = name
         self.field_type = field_type
@@ -36,8 +49,17 @@ class Field:
     def __get__(self, obj: Any, owner: type) -> Any:
         if obj is None:
             return self
+        # None in place of the whole dict means "not loaded"; None inside it is an ordinary value.
+        if obj._values is None:
+            raise NotLoadedError(obj)
         raw = obj._values[self.name]
         if self.field_type is None:
             resolve(owner)
             assert self.field_type is not None
-        return self.field_type.load(obj._src, raw)
+        if not isinstance(self.field_type, Reference):
+            return raw
+        # The handle keeps the handles it refers to. The store holds handles only weakly, so without
+        # this `edge.u` would be a new, unloaded object on every read and a load would not stick.
+        if self.name not in obj._refs:
+            obj._refs[self.name] = self.field_type.load(obj._src, raw)
+        return obj._refs[self.name]

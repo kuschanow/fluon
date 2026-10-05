@@ -5,13 +5,15 @@ from typing import Any, Union, get_args, get_origin
 
 from fluon._core.errors import FieldTypeError
 from fluon._core.types.descriptors import Link, OptionalRef, OptionalRefs, Ref, Refs
-from fluon._core.utils import registry_of
+from fluon._core.utils import id_of, registry_of
 
 
 class FieldType:
-    def load(self, src: Any, raw: Any) -> Any:
-        """Turn a stored value into what the user sees. Plain values are returned as stored."""
-        return raw
+    """What a field holds. Only references differ between what is stored and what the user sees."""
+
+    def dump(self, value: Any) -> Any:
+        """Turn what the user passed into what is stored. Plain values are stored as given."""
+        return value
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,19 @@ class Reference(FieldType):
         if self.optional:
             return Link[Any](raw, src, self.target)
         return src.handle(self.target, raw)
+
+    def dump(self, value: Any) -> Any:
+        if self.many:
+            return tuple(self._dump_one(item) for item in value)
+        return self._dump_one(value)
+
+    def _dump_one(self, item: Any) -> Any:
+        # The field name is unknown here; the caller adds it to the message.
+        if item is None and self.optional:
+            return None
+        if type(item) is not self.target:
+            raise TypeError(f"expected {self.target.__name__}, got {item!r}")
+        return id_of(item)
 
 
 @dataclass(frozen=True)
@@ -85,10 +100,12 @@ def parse(hint: object) -> FieldType:
 
 
 def _parse(hint: object, *, in_container: bool) -> FieldType:
+    # origin is None for a bare type (float, list, Node); otherwise the generic it was built from.
     origin, args = get_origin(hint), get_args(hint)
 
     if origin in _REFERENCES:
         return _parse_reference(hint, origin, args, in_container=in_container)
+    # `X | None` and `Optional[X]` are different objects at run time.
     if origin is Union or origin is UnionType:
         return _parse_nullable(hint, args, in_container=in_container)
     if origin is tuple:
@@ -101,6 +118,8 @@ def _parse(hint: object, *, in_container: bool) -> FieldType:
         raise FieldTypeError(hint, "mutable containers are not allowed; use tuple[...] or frozenset[...]")
     if isinstance(hint, type) and issubclass(hint, _SCALARS):
         return Scalar(hint)
+    # A bare entity type: the reference kind decides what happens when the target is removed,
+    # so it has to be spelled out.
     if registry_of(hint) is not None:
         if in_container:
             raise FieldTypeError(hint, "references are not allowed inside tuple[...] or frozenset[...]; use Refs[...] or OptionalRefs[...]")

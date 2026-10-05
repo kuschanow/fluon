@@ -23,6 +23,8 @@ def id_of(entity: object) -> int:
 
 
 def registry_of(cls: object) -> Registry | None:
+    """The registry an entity class belongs to, or None if `cls` is not an entity class."""
+    # The mark alone is not enough: a subclass inherits it, and a registry may have dropped the class.
     owner = getattr(cls, "__fluon_registry__", None)
     if isinstance(owner, Registry) and owner.is_registered(cls):
         return owner

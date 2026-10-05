@@ -28,6 +28,7 @@ class Registry:
         self._by_class: dict[type, TypeInfo] = {}
 
     def register(self, key: str, version: int, cls: type) -> TypeInfo:
+        # The only way in: every key held by a registry has passed these checks.
         _check_key(key)
         _check_version(version)
         if key in self._by_key:
@@ -36,6 +37,10 @@ class Registry:
         self._by_key[key] = info
         self._by_class[cls] = info
         return info
+
+    def classes(self) -> list[type]:
+        """Every registered class, in registration order."""
+        return list(self._by_class.keys())
 
     def by_key(self, key: str) -> TypeInfo:
         try:

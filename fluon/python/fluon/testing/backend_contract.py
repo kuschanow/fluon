@@ -563,50 +563,23 @@ class BackendContract:
             with pytest.raises(UnknownEntityError):
                 await tx.fields("graph.Node", [2])
 
-    # --- An id is never reused within its type ---
+    # --- Ids: no two live entities share one, and the mark only moves forward ---
+    #
+    # The store is the one issuing ids and it never issues the same id twice; the backend keeps the
+    # mark the store continues from. Operations run concurrently and may commit in any order, so the
+    # backend must not expect ids to arrive sorted.
 
-    async def test_id_of_a_deleted_entity_cannot_be_taken_again(self, backend: Backend) -> None:
-        await _create(backend, "graph.Node", [1], label=["a"])
-        await _commit(backend, _delete("graph.Node", 1))
-
-        async with backend.transaction() as tx:
-            with pytest.raises(DuplicateIdError, match="1"):
-                await tx.apply(_node(1, "reborn"))
-
-    async def test_id_cannot_be_retaken_in_the_transaction_that_deleted_it(self, backend: Backend) -> None:
-        await _create(backend, "graph.Node", [1], label=["a"])
-
-        async with backend.transaction() as tx:
-            await tx.apply(_delete("graph.Node", 1))
-            with pytest.raises(DuplicateIdError):
-                await tx.apply(_node(1, "reborn"))
-
-    async def test_id_cannot_be_deleted_and_recreated_in_one_change_set(self, backend: Backend) -> None:
+    async def test_id_of_a_live_entity_cannot_be_taken_in_the_same_change_set(self, backend: Backend) -> None:
         await _create(backend, "graph.Node", [1], label=["a"])
 
         async with backend.transaction() as tx:
             with pytest.raises(DuplicateIdError):
                 await tx.apply(
                     ChangeSet(
-                        created=[CreatedBatch("graph.Node", [1], {"label": ["reborn"]})],
+                        created=[CreatedBatch("graph.Node", [1], {"label": ["again"]})],
                         deleted=[DeletedBatch("graph.Node", [1])],
                     )
                 )
-
-    async def test_id_created_and_deleted_in_one_transaction_is_spent(self, backend: Backend) -> None:
-        await _commit(backend, _node(1), _delete("graph.Node", 1))
-
-        async with backend.transaction() as tx:
-            with pytest.raises(DuplicateIdError):
-                await tx.apply(_node(1))
-
-    async def test_spent_id_is_spent_only_within_its_type(self, backend: Backend) -> None:
-        await _create(backend, "graph.Node", [1], label=["a"])
-        await _commit(backend, _delete("graph.Node", 1))
-
-        await _create(backend, "graph.Edge", [1], u=[2], v=[3])
-
-        assert await _exists(backend, "graph.Edge", 1)
 
     async def test_id_from_a_rolled_back_deletion_is_still_taken(self, backend: Backend) -> None:
         await _create(backend, "graph.Node", [1], label=["a"])
@@ -629,20 +602,20 @@ class BackendContract:
         async with backend.transaction() as tx:
             assert await tx.fields("graph.Node", [1]) == {"label": ["second attempt"]}
 
-    # --- Ids of a type only grow: everything below the highest id ever taken is spent ---
+    async def test_ids_may_be_committed_out_of_order(self, backend: Backend) -> None:
+        # Two operations took ids 3 and 5; the one holding 5 happened to commit first.
+        await _create(backend, "graph.Node", [5], label=["late id"])
 
-    async def test_id_below_the_highest_taken_one_is_rejected_even_if_never_used(self, backend: Backend) -> None:
-        # The backend keeps one "next free id" mark per type instead of remembering every id ever used.
-        await _create(backend, "graph.Node", [5], label=["a"])
+        await _create(backend, "graph.Node", [3], label=["early id"])
 
         async with backend.transaction() as tx:
-            with pytest.raises(DuplicateIdError, match="3"):
-                await tx.apply(_node(3))
+            assert await tx.fields("graph.Node", [3, 5]) == {"label": ["early id", "late id"]}
 
-    async def test_ids_inside_one_batch_must_grow(self, backend: Backend) -> None:
+    async def test_ids_inside_one_batch_need_not_be_sorted(self, backend: Backend) -> None:
+        await _create(backend, "graph.Node", [2, 0, 1], label=["c", "a", "b"])
+
         async with backend.transaction() as tx:
-            with pytest.raises(DuplicateIdError):
-                await tx.apply(ChangeSet(created=[CreatedBatch("graph.Node", [2, 1], {"label": ["b", "a"]})]))
+            assert await tx.fields("graph.Node", [0, 1, 2]) == {"label": ["a", "b", "c"]}
 
     async def test_gaps_between_ids_are_allowed(self, backend: Backend) -> None:
         await _create(backend, "graph.Node", [1, 5, 9], label=["a", "b", "c"])
@@ -651,30 +624,29 @@ class BackendContract:
             assert await tx.fields("graph.Node", [9, 1]) == {"label": ["c", "a"]}
         assert not await _exists(backend, "graph.Node", 3)
 
-    async def test_each_type_has_its_own_mark(self, backend: Backend) -> None:
-        await _create(backend, "graph.Node", [100], label=["a"])
+    async def test_mark_is_the_highest_id_ever_taken_not_the_latest(self, backend: Backend) -> None:
+        await _create(backend, "graph.Node", [5], label=["a"])
+        await _create(backend, "graph.Node", [3], label=["b"])
 
-        await _create(backend, "graph.Edge", [1], u=[100], v=[100])
+        assert await _next_id(backend, "graph.Node") == 6
 
-        assert await _exists(backend, "graph.Edge", 1)
-
-    async def test_mark_survives_deletion_of_the_highest_entity(self, backend: Backend) -> None:
+    async def test_mark_is_not_lowered_by_deleting_the_highest_entity(self, backend: Backend) -> None:
         await _create(backend, "graph.Node", [1, 2], label=["a", "b"])
         await _commit(backend, _delete("graph.Node", 2))
 
-        async with backend.transaction() as tx:
-            with pytest.raises(DuplicateIdError):
-                await tx.apply(_node(2))
-            await tx.apply(_node(3))
+        assert await _next_id(backend, "graph.Node") == 3
+
+    async def test_mark_counts_an_entity_created_and_deleted_in_one_transaction(self, backend: Backend) -> None:
+        await _commit(backend, _node(4), _delete("graph.Node", 4))
+
+        assert await _next_id(backend, "graph.Node") == 5
 
     async def test_mark_moved_by_a_rolled_back_transaction_is_restored(self, backend: Backend) -> None:
         async with backend.transaction() as tx:
             await tx.apply(_node(50))
             await tx.rollback()
 
-        await _commit(backend, _node(2))
-
-        assert await _exists(backend, "graph.Node", 2)
+        assert await _next_id(backend, "graph.Node") == 0
 
     # --- Reading the mark: the store continues numbering from it ---
 

@@ -6,6 +6,7 @@ from .invalid_field_name_error import InvalidFieldNameError
 from .invalid_type_key_error import InvalidTypeKeyError
 from .missing_error import MissingError
 from .no_active_operation_error import NoActiveOperationError
+from .not_loaded_error import NotLoadedError
 from .not_registered_error import NotRegisteredError
 from .transaction_closed_error import TransactionClosedError
 from .transaction_conflict_error import TransactionConflictError
@@ -23,6 +24,7 @@ __all__ = [
     "InvalidTypeKeyError",
     "MissingError",
     "NoActiveOperationError",
+    "NotLoadedError",
     "NotRegisteredError",
     "TransactionClosedError",
     "TransactionConflictError",

@@ -5,14 +5,19 @@ from typing import Any, TypeGuard
 from fluon._core.backend import ChangeSet
 from fluon._core.errors import DuplicateIdError, TransactionClosedError, TransactionConflictError, UnknownEntityError
 
-_Data = dict[str, dict[int, dict[str, Any]]]
+# Reference backend on plain dicts: the simplest thing that satisfies the Backend contract.
+# A transaction works on its own copy of the state and hands it back on commit.
+
+_Data = dict[str, dict[int, dict[str, Any]]]  # type key -> id -> field values
 
 
 def _copy(data: _Data) -> _Data:
+    # Two levels are enough: a row is never changed after it is created.
     return {type_key: dict(rows) for type_key, rows in data.items()}
 
 
 def _is_tuple(value: object) -> TypeGuard[tuple[Any, ...]]:
+    # A plain isinstance check narrows to a tuple of unknown items, which strict pyright rejects.
     return isinstance(value, tuple)
 
 
@@ -23,7 +28,7 @@ class _DictTransaction:
         self._commit = commit
         self._version = version
 
-        self._readonly = True
+        self._readonly = True  # a transaction that wrote nothing neither conflicts nor moves the version
         self._closed = False
 
     def _create(self, changes: ChangeSet, data: _Data, next_id: dict[str, int]) -> None:
@@ -33,8 +38,9 @@ class _DictTransaction:
                 if len(column) != len(batch.ids):
                     raise ValueError(f"column {name!r} has {len(column)} values for {len(batch.ids)} ids")
             for i, id_ in enumerate(batch.ids):
-                if id_ < next_id.get(batch.type_key, 0):
+                if id_ in type_data:
                     raise DuplicateIdError(batch.type_key, id_)
+                # Ids need not arrive in order: operations commit in any order.
                 next_id[batch.type_key] = max(next_id.get(batch.type_key, 0), id_ + 1)
                 type_data[id_] = {name: column[i] for name, column in batch.columns.items()}
 
@@ -53,6 +59,7 @@ class _DictTransaction:
     async def apply(self, changes: ChangeSet) -> None:
         if self._closed:
             raise TransactionClosedError()
+        # Work on a copy and install it only at the end: a rejected change set leaves no trace.
         data = _copy(self._data)
         next_id = self._next_id.copy()
 
@@ -84,6 +91,7 @@ class _DictTransaction:
     async def referencing(self, type_key: str, field: str, targets: Sequence[int]) -> list[int]:
         if self._closed:
             raise TransactionClosedError()
+        # A full scan; a real backend would keep an index. A column holds one id or a tuple of ids.
         wanted = set(targets)
         result: list[int] = []
         for id_, entity_data in self._data.get(type_key, {}).items():
@@ -105,7 +113,7 @@ class _DictTransaction:
             if not self._readonly:
                 self._commit(self._data, self._next_id, self._version)
         finally:
-            await self.close()
+            await self.close()  # closed even if the commit was rejected
 
     async def rollback(self) -> None:
         if self._closed:
@@ -131,6 +139,8 @@ class DictBackend:
             await tx.close()
 
     def _install(self, data: _Data, next_id: dict[str, int], based_on: int) -> None:
+        # The one place where the state changes. A transaction that started before another one
+        # committed would overwrite that commit, so it is rejected instead.
         if based_on != self._version:
             raise TransactionConflictError()
         self._data = data
