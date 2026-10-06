@@ -88,6 +88,12 @@ class _DictTransaction:
             raise TransactionClosedError()
         return list(self._data.get(type_key, {}).keys())
 
+    async def existing(self, type_key: str, ids: Sequence[int]) -> list[int]:
+        if self._closed:
+            raise TransactionClosedError()
+        type_data = self._data.get(type_key, {})
+        return sorted({id_ for id_ in ids if id_ in type_data})
+
     async def referencing(self, type_key: str, field: str, targets: Sequence[int]) -> list[int]:
         if self._closed:
             raise TransactionClosedError()

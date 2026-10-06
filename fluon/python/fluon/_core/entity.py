@@ -1,22 +1,37 @@
 from collections.abc import Callable
 from typing import Any, ClassVar, TypeVar, dataclass_transform, get_origin
 
-from fluon._core.context import current_operation
-from fluon._core.errors import FrozenEntityError, InvalidFieldNameError, NoActiveOperationError
+from fluon._core.errors import FrozenEntityError, InvalidFieldNameError
 from fluon._core.registry import Registry
 from fluon._core.registry import registry as default_registry
-from fluon._core.types.field import Field
+from fluon._core.types.field import Field, resolve
 
 T = TypeVar("T")
 
 
 def _entity_init(self: object, **kwargs: Any) -> None:
-    # Installed as __init__ of every entity class: calling the class records a creation in the
-    # current operation. Handles of existing entities are built by make_handle, which skips __init__.
-    operation = current_operation.get()
-    if operation is None:
-        raise NoActiveOperationError("Entity instances cannot be initialized directly. Use the appropriate factory method.")
-    operation.create(self, kwargs)
+    # Installed as __init__ of every entity class. Calling the class only describes a new entity:
+    # the object has no id and no store until it is passed to `op.add`. Handles of existing entities
+    # are built by make_handle, which skips __init__.
+    cls = type(self)
+    resolve(cls)
+    fields = {name: attr for name, attr in vars(cls).items() if isinstance(attr, Field)}
+    if extra := set(kwargs) - set(fields):
+        raise TypeError(f"{cls.__name__} got unexpected keyword arguments: {', '.join(repr(name) for name in sorted(extra))}")
+    values: dict[str, Any] = {}
+    for name, field in fields.items():
+        if name in kwargs:
+            given = kwargs[name]
+        elif field.has_default:
+            given = field.default
+        else:
+            raise TypeError(f"{cls.__name__} is missing required field {name!r}")
+        assert field.field_type is not None
+        try:
+            values[name] = field.field_type.accept(given)
+        except TypeError as e:
+            raise TypeError(f"{cls.__name__}.{name}: {e}") from None
+    fill_draft(self, values)
 
 
 def _frozen_setattr(obj: object, name: str, value: Any) -> None:
@@ -29,21 +44,29 @@ class _HandleMethods:
     """Methods copied onto every entity class. Never instantiated."""
 
     _src: Any
-    _id: int
+    _id: int | None
 
     # A handle is identified by (source, type, id), never by the Python object or by field values.
+    # An entity that is not added yet has no id: it is equal only to itself.
 
     def __eq__(self, other: object) -> bool:
         if type(other) is not type(self):
             return NotImplemented
+        if self._id is None:
+            return self is other
         return self._id == other._id and self._src is other._src
 
     def __hash__(self) -> int:
+        # A hash must never change, and the identity of a new entity appears only when it is added.
+        if self._id is None:
+            raise TypeError(f"unhashable: {self!r} is not added to a store yet")
         # id() of the source, to match the `is` in __eq__ and to work with unhashable sources.
         return hash((id(self._src), self._id))
 
     def __repr__(self) -> str:
         # Identity only: repr must stay cheap and work for unloaded and dead entities alike.
+        if self._id is None:
+            return f"<{type(self).__name__} (not added)>"
         return f"<{type(self).__name__} #{self._id}>"
 
 
@@ -56,9 +79,22 @@ def fill_handle(obj: object, src: Any, id_: int, values: dict[str, Any] | None) 
     object.__setattr__(obj, "_src", src)
     object.__setattr__(obj, "_id", id_)
     object.__setattr__(obj, "_values", values)
+    object.__setattr__(obj, "_draft", None)
     if not hasattr(obj, "_refs"):
         object.__setattr__(obj, "_refs", {})  # resolved references: field name -> handle(s)
         object.__setattr__(obj, "_op", None)  # the operation creating this entity, until it is written
+        object.__setattr__(obj, "_dead", False)  # True if the entity is known to be deleted in its source
+
+
+def fill_draft(obj: object, values: dict[str, Any]) -> None:
+    """Make an entity object a new, not yet added entity: no source, no id, field values as accepted."""
+    object.__setattr__(obj, "_src", None)
+    object.__setattr__(obj, "_id", None)  # None is what marks the entity as not added
+    object.__setattr__(obj, "_values", None)
+    object.__setattr__(obj, "_draft", values)  # what `op.add` turns into stored values
+    object.__setattr__(obj, "_refs", {})
+    object.__setattr__(obj, "_op", None)
+    object.__setattr__(obj, "_dead", False)
 
 
 def make_handle(cls: type[T], src: Any, id_: int, values: dict[str, Any] | None) -> T:
@@ -76,6 +112,12 @@ def set_operation(obj: object, operation: object | None) -> None:
 def unload(obj: object) -> None:
     """Forget the field values of a handle: the backend no longer confirms them."""
     object.__setattr__(obj, "_values", None)
+
+
+def mark_dead(obj: object) -> None:
+    """Mark a handle as dead: the backend no longer confirms its existence."""
+    unload(obj)
+    object.__setattr__(obj, "_dead", True)
 
 
 def _is_class_var(annotation: object) -> bool:

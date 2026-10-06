@@ -8,7 +8,7 @@ This file is never executed. It is checked by mypy and pyright (see `make typech
 
 from typing import assert_type
 
-from fluon import Link, OptionalRef, OptionalRefs, Ref, Refs, Registry, alive, entity, id_of
+from fluon import Link, Operation, OptionalRef, OptionalRefs, Ref, Refs, Registry, alive, entity, id_of
 
 
 @entity("checks.Node", version=1)
@@ -57,6 +57,12 @@ def construction(a: Node, b: Node) -> None:
     assert_type(Edge(u=a, v=b, note=None, weight=2.0), Edge)
     assert_type(Group(name="g", owners=[a, b], members=(a, None)), Group)
     assert_type(Group(name="g", owners=(), members=()), Group)
+
+
+def adding(op: Operation, a: Node, b: Node) -> None:
+    # `op.add` gives back what it was given, with its type.
+    assert_type(op.add(Node(label="a")), Node)
+    assert_type(op.add(Edge(u=a, v=b, note=None)), Edge)
 
 
 def reading(node: Node, edge: Edge, group: Group) -> None:

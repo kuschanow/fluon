@@ -8,7 +8,7 @@ from fluon._core.backend import Backend, ChangeSet, CreatedBatch, DeletedBatch, 
 from fluon._core.entity import entity
 from fluon._core.errors import FrozenEntityError, NoActiveOperationError, TypeKeyCollisionError
 from fluon._core.registry import Registry, TypeInfo
-from fluon._core.store import Store
+from fluon._core.store import Operation, Store
 from fluon._core.types.descriptors import Link, OptionalRef, OptionalRefs, Ref, Refs
 from fluon._core.utils import alive, id_of, registry_of
 
@@ -25,6 +25,7 @@ __all__ = [
     "Registry",
     "TypeInfo",
     "Link",
+    "Operation",
     "OptionalRef",
     "OptionalRefs",
     "Ref",

@@ -1,6 +1,7 @@
 from typing import Any, get_type_hints
 
-from fluon._core.errors import CrossRegistryReferenceError, NotLoadedError, UnresolvedAnnotationError
+from fluon._core.context import current_operation
+from fluon._core.errors import CrossRegistryReferenceError, EntityNotAliveError, NotAddedError, NotLoadedError, UnresolvedAnnotationError
 from fluon._core.types.field_type import FieldType, Reference, parse
 from fluon._core.utils import registry_of
 
@@ -28,6 +29,11 @@ def resolve(cls: type) -> None:
         attr.field_type = field_type
 
 
+def _removed_now(obj: Any) -> bool:
+    operation = current_operation.get()
+    return operation is not None and operation.store is obj._src and (type(obj), obj._id) in operation.removed
+
+
 class Field:
     """The descriptor installed on an entity class for each of its fields.
 
@@ -49,6 +55,10 @@ class Field:
     def __get__(self, obj: Any, owner: type) -> Any:
         if obj is None:
             return self
+        if obj._id is None:
+            raise NotAddedError(obj)
+        if obj._dead or _removed_now(obj):
+            raise EntityNotAliveError(obj)
         # None in place of the whole dict means "not loaded"; None inside it is an ordinary value.
         if obj._values is None:
             raise NotLoadedError(obj)
@@ -57,9 +67,10 @@ class Field:
             resolve(owner)
             assert self.field_type is not None
         if not isinstance(self.field_type, Reference):
-            return raw
-        # The handle keeps the handles it refers to. The store holds handles only weakly, so without
-        # this `edge.u` would be a new, unloaded object on every read and a load would not stick.
+            return self.field_type.load(obj._src, raw)
+        # Only references are cached: the handle keeps the handles it refers to. The store holds
+        # handles only weakly, so without this `edge.u` would be a new, unloaded object on every read
+        # and a load would not stick.
         if self.name not in obj._refs:
             obj._refs[self.name] = self.field_type.load(obj._src, raw)
         return obj._refs[self.name]

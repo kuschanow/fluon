@@ -3,7 +3,7 @@ from enum import Enum
 from types import NoneType, UnionType
 from typing import Any, Union, get_args, get_origin
 
-from fluon._core.errors import FieldTypeError
+from fluon._core.errors import FieldTypeError, ForeignEntityError
 from fluon._core.types.descriptors import Link, OptionalRef, OptionalRefs, Ref, Refs
 from fluon._core.utils import id_of, registry_of
 
@@ -11,8 +11,16 @@ from fluon._core.utils import id_of, registry_of
 class FieldType:
     """What a field holds. Only references differ between what is stored and what the user sees."""
 
-    def dump(self, value: Any) -> Any:
-        """Turn what the user passed into what is stored. Plain values are stored as given."""
+    def load(self, src: Any, raw: Any) -> Any:
+        """Turn a stored value into what the user sees. Plain values are returned as stored."""
+        return raw
+
+    def accept(self, value: Any) -> Any:
+        """Check what the user passed for a new entity and return what the entity keeps until it is added."""
+        return value
+
+    def dump(self, value: Any, src: Any) -> Any:
+        """Turn an accepted value into what is stored, for an entity being added to `src`."""
         return value
 
 
@@ -41,18 +49,32 @@ class Reference(FieldType):
             return Link[Any](raw, src, self.target)
         return src.handle(self.target, raw)
 
-    def dump(self, value: Any) -> Any:
+    def accept(self, value: Any) -> Any:
+        # Collections are frozen into tuples here: the caller may pass a list or a generator.
         if self.many:
-            return tuple(self._dump_one(item) for item in value)
-        return self._dump_one(value)
+            return tuple(self._accept_one(item) for item in value)
+        return self._accept_one(value)
 
-    def _dump_one(self, item: Any) -> Any:
+    def _accept_one(self, item: Any) -> Any:
         # The field name is unknown here; the caller adds it to the message.
         if item is None and self.optional:
             return None
         if type(item) is not self.target:
             raise TypeError(f"expected {self.target.__name__}, got {item!r}")
-        return id_of(item)
+        return item
+
+    def dump(self, value: Any, src: Any) -> Any:
+        if self.many:
+            return tuple(self._dump_one(item, src) for item in value)
+        return self._dump_one(value, src)
+
+    def _dump_one(self, item: Any, src: Any) -> Any:
+        if item is None:
+            return None
+        id_ = id_of(item)  # NotAddedError for an entity that has no id yet
+        if getattr(item, "_src") is not src:
+            raise ForeignEntityError(item)
+        return id_
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,7 @@ class FakeSource:
 
     The source contract used by fields:
       handle(cls, id) -> handle of a live entity
-      alive(cls, id)  -> whether the entity still exists
+      is_alive(cls, id) -> whether the entity still exists
     """
 
     def __init__(self) -> None:
@@ -33,12 +33,12 @@ class FakeSource:
 
     def handle(self, cls: type[T], id_: int) -> T:
         self.handle_calls += 1
-        assert id_ not in self.dead, f"handle() called for dead entity {id_}; check alive() first"
+        assert id_ not in self.dead, f"handle() called for dead entity {id_}; check is_alive() first"
         stored_cls, values = self.rows[id_]
         assert stored_cls is cls, f"entity {id_} is {stored_cls.__name__}, not {cls.__name__}"
         return make_handle(cls, self, id_, values)  # type: ignore[arg-type]
 
-    def alive(self, cls: type, id_: int) -> bool:
+    def is_alive(self, cls: type, id_: int) -> bool:
         self.alive_calls += 1
         stored_cls, _ = self.rows[id_]
         assert stored_cls is cls, f"entity {id_} is {stored_cls.__name__}, not {cls.__name__}"
@@ -64,6 +64,11 @@ class _SlowTransaction:
     async def all(self, type_key: str) -> list[int]:
         await asyncio.sleep(0)
         return await self._inner.all(type_key)
+
+    async def existing(self, type_key: str, ids: Sequence[int]) -> list[int]:
+        await asyncio.sleep(0)
+        self._backend.existence_checks.append((type_key, list(ids)))
+        return await self._inner.existing(type_key, ids)
 
     async def referencing(self, type_key: str, field: str, targets: Sequence[int]) -> list[int]:
         await asyncio.sleep(0)
@@ -91,6 +96,7 @@ class SlowBackend:
         self.inner = DictBackend()
         self.transactions = 0
         self.field_reads: list[tuple[str, list[int]]] = []  # every `fields` call: (type key, ids)
+        self.existence_checks: list[tuple[str, list[int]]] = []  # every `existing` call
         self.fail_marks = False
 
     @asynccontextmanager

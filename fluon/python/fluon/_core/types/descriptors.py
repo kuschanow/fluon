@@ -28,7 +28,7 @@ class Link(Generic[T]):
 
     @property
     def alive(self) -> bool:
-        return self.id is not None and self._src.alive(self._target_type, self.id)
+        return self.id is not None and self._src.is_alive(self._target_type, self.id)
 
     def get(self) -> T:
         if not self.alive:

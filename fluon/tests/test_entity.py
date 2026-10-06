@@ -1,9 +1,10 @@
 import pytest
 
 from fluon._core.entity import entity, make_handle
-from fluon._core.errors import FrozenEntityError, InvalidTypeKeyError, NoActiveOperationError, TypeKeyCollisionError
+from fluon._core.errors import FrozenEntityError, InvalidTypeKeyError, NotAddedError, TypeKeyCollisionError
 from fluon._core.registry import registry
 from fluon._core.types.field import Field
+from fluon._core.utils import id_of
 
 # --- Registration ---
 
@@ -152,13 +153,16 @@ def test_handles_do_not_share_values() -> None:
     assert (a.label, b.label) == ("a", "b")
 
 
-def test_direct_construction_needs_operation() -> None:
+def test_direct_construction_makes_an_entity_that_is_not_added() -> None:
     @entity("graph.Node", version=1)
     class Node:
         label: str
 
-    with pytest.raises(NoActiveOperationError):
-        Node(label="a")  # type: ignore[call-arg]
+    node = Node(label="a")
+
+    assert isinstance(node, Node)
+    with pytest.raises(NotAddedError):
+        id_of(node)
 
 
 # --- Immutability ---

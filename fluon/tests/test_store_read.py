@@ -41,12 +41,12 @@ def backend() -> Backend:
 async def store(backend: Backend) -> Store:
     """A store that did not create the data it reads: nodes a(0), b(1), c(2); edges 0: a->b, 1: b->c; team {a, c}."""
     writer = Store(backend)
-    async with writer.op():
-        a, b, c = Node(label="a"), Node(label="b"), Node(label="c")
-        Edge(u=a, v=b, weight=0.5)
-        Edge(u=b, v=c)
-        Team(owners=[a, c])
-        Marker()
+    async with writer.op() as op:
+        a, b, c = op.add(Node(label="a")), op.add(Node(label="b")), op.add(Node(label="c"))
+        op.add(Edge(u=a, v=b, weight=0.5))
+        op.add(Edge(u=b, v=c))
+        op.add(Team(owners=[a, c]))
+        op.add(Marker())
     return Store(backend)
 
 
@@ -104,8 +104,8 @@ async def test_fetch_uses_the_id_space_of_the_requested_type(store: Store) -> No
 
 async def test_fetched_handle_equals_the_one_from_creation(backend: Backend) -> None:
     store = Store(backend)
-    async with store.op():
-        created = Node(label="a")
+    async with store.op() as op:
+        created = op.add(Node(label="a"))
 
     assert await store.fetch(Node, 0) == created
 
@@ -257,8 +257,8 @@ async def test_loading_a_deleted_entity_is_rejected(store: Store, backend: Backe
 async def test_unloaded_handle_can_be_used_as_a_reference(store: Store, backend: Backend) -> None:
     edge = await store.fetch(Edge, 0)
 
-    async with store.op():
-        shortcut = Edge(u=edge.v, v=edge.u)
+    async with store.op() as op:
+        shortcut = op.add(Edge(u=edge.v, v=edge.u))
 
     async with backend.transaction() as tx:
         assert await tx.fields("store_read.Edge", [id_of(shortcut)]) == {"u": [1], "v": [0], "weight": [1.0]}
@@ -268,23 +268,23 @@ async def test_unloaded_handle_can_be_used_as_a_reference(store: Store, backend:
 
 
 async def test_fetch_inside_an_operation_sees_its_own_creation(store: Store) -> None:
-    async with store.op():
-        created = Node(label="new")
+    async with store.op() as op:
+        created = op.add(Node(label="new"))
 
         assert await store.fetch(Node, id_of(created)) == created
         assert (await store.fetch(Node, id_of(created))).label == "new"
 
 
 async def test_all_inside_an_operation_includes_its_own_creations(store: Store) -> None:
-    async with store.op():
-        Node(label="new")
+    async with store.op() as op:
+        op.add(Node(label="new"))
 
         assert [n.label for n in await store.all(Node)] == ["a", "b", "c", "new"]
 
 
 async def test_creations_of_an_operation_are_invisible_to_another_store(store: Store, backend: Backend) -> None:
-    async with store.op():
-        Node(label="new")
+    async with store.op() as op:
+        op.add(Node(label="new"))
 
         assert [n.label for n in await Store(backend).all(Node)] == ["a", "b", "c"]
 
@@ -292,8 +292,8 @@ async def test_creations_of_an_operation_are_invisible_to_another_store(store: S
 async def test_entity_of_a_discarded_operation_cannot_be_fetched(store: Store) -> None:
     # The handle is still around, but the entity never reached the backend.
     with pytest.raises(RuntimeError):
-        async with store.op():
-            lost = Node(label="lost")
+        async with store.op() as op:
+            lost = op.add(Node(label="lost"))
             raise RuntimeError
 
     with pytest.raises(UnknownEntityError):
@@ -336,10 +336,10 @@ async def recording() -> tuple[Store, SlowBackend]:
     """Same data as `store`, on a backend that records every read."""
     backend = SlowBackend()
     writer = Store(backend)
-    async with writer.op():
-        a, b, c = Node(label="a"), Node(label="b"), Node(label="c")
-        Edge(u=a, v=b, weight=0.5)
-        Edge(u=b, v=c)
+    async with writer.op() as op:
+        a, b, c = op.add(Node(label="a")), op.add(Node(label="b")), op.add(Node(label="c"))
+        op.add(Edge(u=a, v=b, weight=0.5))
+        op.add(Edge(u=b, v=c))
     del a, b, c
     backend.field_reads.clear()
     backend.transactions = 0
@@ -368,8 +368,8 @@ async def test_fetch_of_a_loaded_entity_does_not_touch_the_backend(recording: tu
 async def test_fetch_of_an_entity_created_here_does_not_touch_the_backend() -> None:
     backend = SlowBackend()
     store = Store(backend)
-    async with store.op():
-        created = Node(label="a")
+    async with store.op() as op:
+        created = op.add(Node(label="a"))
     backend.transactions = 0
 
     assert await store.fetch(Node, 0) is created
@@ -392,8 +392,8 @@ async def test_entity_of_a_discarded_operation_is_looked_up_in_the_backend() -> 
     backend = SlowBackend()
     store = Store(backend)
     with pytest.raises(RuntimeError):
-        async with store.op():
-            lost = Node(label="lost")
+        async with store.op() as op:
+            lost = op.add(Node(label="lost"))
             raise RuntimeError
     backend.field_reads.clear()
 
@@ -542,8 +542,8 @@ async def test_fetch_after_a_rejected_reload_asks_the_backend_again(store: Store
 async def test_load_and_reload_skip_entities_of_the_current_operation(recording: tuple[Store, SlowBackend]) -> None:
     store, backend = recording
 
-    async with store.op():
-        created = Node(label="new")
+    async with store.op() as op:
+        created = op.add(Node(label="new"))
         backend.transactions = 0
 
         await store.load(created)

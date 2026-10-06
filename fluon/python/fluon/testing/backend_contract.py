@@ -795,6 +795,52 @@ class BackendContract:
             with pytest.raises(TransactionClosedError):
                 await tx.all("graph.Node")
 
+    # --- Asking which entities exist ---
+
+    async def test_existing_returns_the_ids_that_exist(self, backend: Backend) -> None:
+        await _create(backend, "graph.Node", [0, 1, 2], label=["a", "b", "c"])
+
+        async with backend.transaction() as tx:
+            assert await tx.existing("graph.Node", [2, 5, 0]) == [0, 2]
+
+    async def test_existing_lists_each_id_once(self, backend: Backend) -> None:
+        await _create(backend, "graph.Node", [0, 1], label=["a", "b"])
+
+        async with backend.transaction() as tx:
+            assert await tx.existing("graph.Node", [1, 1, 0, 1]) == [0, 1]
+
+    async def test_existing_of_nothing_or_of_an_unknown_type_is_empty(self, backend: Backend) -> None:
+        await _create(backend, "graph.Node", [0], label=["a"])
+
+        async with backend.transaction() as tx:
+            assert await tx.existing("graph.Node", []) == []
+            assert await tx.existing("graph.Edge", [0]) == []
+
+    async def test_existing_skips_deleted_entities(self, backend: Backend) -> None:
+        await _create(backend, "graph.Node", [0, 1], label=["a", "b"])
+        await _commit(backend, _delete("graph.Node", 0))
+
+        async with backend.transaction() as tx:
+            assert await tx.existing("graph.Node", [0, 1]) == [1]
+
+    async def test_existing_reflects_the_transaction_own_changes_only(self, backend: Backend) -> None:
+        await _create(backend, "graph.Node", [0], label=["a"])
+
+        async with backend.transaction() as writer:
+            await writer.apply(_node(1))
+            await writer.apply(_delete("graph.Node", 0))
+
+            assert await writer.existing("graph.Node", [0, 1]) == [1]
+            async with backend.transaction() as reader:
+                assert await reader.existing("graph.Node", [0, 1]) == [0]
+
+    async def test_existing_cannot_be_read_from_a_closed_transaction(self, backend: Backend) -> None:
+        async with backend.transaction() as tx:
+            await tx.commit()
+
+            with pytest.raises(TransactionClosedError):
+                await tx.existing("graph.Node", [0])
+
     # --- Reverse lookup: which entities hold one of these ids in a given column ---
     #
     # The backend does not know which columns are references: the store names the column to search.

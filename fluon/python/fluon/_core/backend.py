@@ -57,6 +57,10 @@ class Transaction(Protocol):
         """Ids of every entity of a type, ascending."""
         ...
 
+    async def existing(self, type_key: str, ids: Sequence[int]) -> list[int]:
+        """Those of `ids` that are entities of the type, ascending, each once."""
+        ...
+
     async def referencing(self, type_key: str, field: str, targets: Sequence[int]) -> list[int]:
         """Ids of the entities holding one of `targets` in column `field`, ascending.
 

@@ -16,6 +16,7 @@ async def usage(tx: Transaction) -> None:
     columns: dict[str, list[Any]] = await tx.fields("graph.Node", (1, 2))
     mark: int = await tx.next_id("graph.Node")
     ids: list[int] = await tx.all("graph.Node")
+    present: list[int] = await tx.existing("graph.Node", (1, 2))
     carriers: list[int] = await tx.referencing("graph.Edge", "u", (1, 2))
     await tx.commit()
-    del columns, mark, ids, carriers
+    del columns, mark, ids, carriers, present

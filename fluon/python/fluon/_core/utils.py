@@ -1,3 +1,4 @@
+from fluon._core.errors import NotAddedError
 from fluon._core.registry import Registry
 from fluon._core.types.descriptors import Link
 
@@ -8,7 +9,8 @@ def alive(entity: object) -> bool:
         raise TypeError("Expected an entity, got a Link. Use the `alive` property of the Link instead.")
     if registry_of(type(entity)) is None:
         raise TypeError(f"Expected an entity, got {type(entity).__name__!r}")
-    result: bool = getattr(entity, "_src").alive(type(entity), id_of(entity))
+    id_ = id_of(entity)  # first: a new entity has no source to ask
+    result: bool = getattr(entity, "_src").is_alive(type(entity), id_)
     return result
 
 
@@ -18,7 +20,9 @@ def id_of(entity: object) -> int:
         raise TypeError("Expected an entity, got a Link. Use the `id` property of the Link instead.")
     if registry_of(type(entity)) is None:
         raise TypeError(f"Expected an entity, got {type(entity).__name__!r}")
-    result: int = getattr(entity, "_id")
+    result: int | None = getattr(entity, "_id")
+    if result is None:
+        raise NotAddedError(entity)
     return result
 
 
